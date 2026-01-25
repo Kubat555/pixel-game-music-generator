@@ -1,0 +1,143 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+  }
+
+  body {
+    @apply bg-chip-black text-chip-white font-body;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+
+  /* Pixel-perfect borders */
+  .pixel-border {
+    @apply border-3 border-chip-white;
+    box-shadow:
+      inset -3px -3px 0 0 #6B6B6B,
+      inset 3px 3px 0 0 #FCFCFC,
+      4px 4px 0 0 rgba(0,0,0,0.5);
+  }
+
+  .pixel-border-inset {
+    @apply border-3 border-chip-gray;
+    box-shadow:
+      inset 3px 3px 0 0 #323232,
+      inset -3px -3px 0 0 #A0A0A0;
+  }
+}
+
+@layer components {
+  .btn-pixel {
+    @apply
+      px-4 py-2
+      font-pixel text-xs
+      bg-chip-darkgray text-chip-white
+      border-3 border-chip-lightgray
+      cursor-pointer
+      select-none
+      transition-transform duration-75;
+    box-shadow:
+      inset -3px -3px 0 0 #323232,
+      inset 3px 3px 0 0 #A0A0A0,
+      4px 4px 0 0 rgba(0,0,0,0.5);
+  }
+
+  .btn-pixel:hover {
+    @apply bg-chip-gray;
+  }
+
+  .btn-pixel:active {
+    transform: translate(2px, 2px);
+    box-shadow:
+      inset 3px 3px 0 0 #323232,
+      inset -3px -3px 0 0 #6B6B6B,
+      2px 2px 0 0 rgba(0,0,0,0.5);
+  }
+
+  .btn-pixel-primary {
+    @apply btn-pixel bg-chip-green;
+  }
+
+  .btn-pixel-primary:hover {
+    @apply bg-chip-lime;
+  }
+
+  .btn-pixel-danger {
+    @apply btn-pixel bg-chip-red;
+  }
+
+  .btn-pixel-danger:hover {
+    @apply bg-chip-orange;
+  }
+
+  .panel-pixel {
+    @apply bg-chip-darkgray p-4;
+    box-shadow:
+      inset -3px -3px 0 0 #0F0F0F,
+      inset 3px 3px 0 0 #6B6B6B,
+      6px 6px 0 0 rgba(0,0,0,0.4);
+  }
+
+  .cell-note {
+    @apply
+      w-cell h-cell
+      border border-chip-darkgray
+      cursor-pointer
+      transition-colors duration-75;
+  }
+
+  .cell-note:hover {
+    @apply bg-chip-gray bg-opacity-50;
+  }
+
+  .cell-note.active {
+    @apply bg-chip-green;
+    box-shadow: inset 0 0 8px rgba(0,0,0,0.3);
+  }
+
+  .cell-note.playing {
+    @apply bg-chip-lime;
+    animation: pulse-glow 0.2s ease-out;
+  }
+
+  /* Track colors */
+  .track-lead .cell-note.active { @apply bg-chip-cyan; }
+  .track-bass .cell-note.active { @apply bg-chip-purple; }
+  .track-harmony .cell-note.active { @apply bg-chip-yellow; }
+  .track-drums .cell-note.active { @apply bg-chip-orange; }
+}
+
+@layer utilities {
+  .scrollbar-pixel {
+    scrollbar-width: thin;
+    scrollbar-color: #6B6B6B #323232;
+  }
+
+  .scrollbar-pixel::-webkit-scrollbar {
+    width: 12px;
+    height: 12px;
+  }
+
+  .scrollbar-pixel::-webkit-scrollbar-track {
+    background: #323232;
+  }
+
+  .scrollbar-pixel::-webkit-scrollbar-thumb {
+    background: #6B6B6B;
+    border: 2px solid #323232;
+  }
+
+  .scrollbar-pixel::-webkit-scrollbar-thumb:hover {
+    background: #A0A0A0;
+  }
+
+  .no-select {
+    user-select: none;
+    -webkit-user-select: none;
+  }
+}
