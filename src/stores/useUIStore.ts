@@ -7,6 +7,7 @@ export const useUIStore = defineStore('ui', () => {
   const mode = ref<UIMode>('beginner')
   const gridZoom = ref(1)
   const showSidebar = ref(true)
+  const showExportPanel = ref(false)
   const showTutorial = ref(false)
   const tutorialStep = ref(0)
   const selectedTool = ref<EditTool>('pencil')
@@ -17,8 +18,8 @@ export const useUIStore = defineStore('ui', () => {
 
   // Grid display settings
   const beatsPerBar = ref(4)
-  const visibleOctaves = ref(2)
-  const startOctave = ref(4)
+  const visibleOctaves = ref(3) // Show 3 octaves by default
+  const startOctave = ref(3)    // Start from octave 3 (C3-B5)
 
   // Getters
   const isBeginnerMode = computed(() => mode.value === 'beginner')
@@ -52,6 +53,14 @@ export const useUIStore = defineStore('ui', () => {
 
   function toggleSidebar(): void {
     showSidebar.value = !showSidebar.value
+  }
+
+  function toggleExportPanel(): void {
+    showExportPanel.value = !showExportPanel.value
+  }
+
+  function setExportPanelVisible(visible: boolean): void {
+    showExportPanel.value = visible
   }
 
   function startTutorial(): void {
@@ -116,8 +125,8 @@ export const useUIStore = defineStore('ui', () => {
   }
 
   function setOctaveRange(start: number, count: number): void {
-    startOctave.value = Math.max(0, Math.min(7, start))
-    visibleOctaves.value = Math.max(1, Math.min(4, count))
+    startOctave.value = Math.max(1, Math.min(7, start))
+    visibleOctaves.value = Math.max(1, Math.min(6, count)) // Allow up to 6 octaves
   }
 
   return {
@@ -125,6 +134,7 @@ export const useUIStore = defineStore('ui', () => {
     mode,
     gridZoom,
     showSidebar,
+    showExportPanel,
     showTutorial,
     tutorialStep,
     selectedTool,
@@ -149,6 +159,8 @@ export const useUIStore = defineStore('ui', () => {
     zoomOut,
     setTool,
     toggleSidebar,
+    toggleExportPanel,
+    setExportPanelVisible,
     startTutorial,
     advanceTutorial,
     completeTutorial,

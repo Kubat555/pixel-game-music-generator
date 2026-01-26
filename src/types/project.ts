@@ -38,6 +38,13 @@ export interface ProjectMeta {
   updatedAt: string
 }
 
+// Full template export including instruments
+export interface ProjectTemplate {
+  version: string
+  project: Project
+  instruments: Record<string, import('./instrument').InstrumentConfig>
+}
+
 export const DEFAULT_TRACKS: Track[] = [
   {
     id: 'lead',

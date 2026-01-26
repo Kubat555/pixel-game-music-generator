@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, onMounted, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useProjectStore } from '@/stores/useProjectStore'
 import { useTransportStore } from '@/stores/useTransportStore'
@@ -13,6 +13,9 @@ const transportStore = useTransportStore()
 const instrumentStore = useInstrumentStore()
 const uiStore = useUIStore()
 const { previewNote } = usePlayback()
+
+// Ref for scrolling container
+const gridContainer = ref<HTMLElement | null>(null)
 
 const { loopStart, loopEnd, tracks } = storeToRefs(projectStore)
 const { currentBeat, isPlaying } = storeToRefs(transportStore)
@@ -41,14 +44,18 @@ const noteRows = computed(() => {
     ]
   }
 
-  // Melodic tracks - show 2 octaves
+  // Melodic tracks - show full range (C1 to B7 = 7 octaves, 84 notes)
   const rows: Array<{ pitch: number; label: string; color: string; isBlackKey: boolean }> = []
 
   // Note names for display
   const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
 
+  // Full range: C1 (MIDI 24) to B7 (MIDI 107)
+  const startOctave = 1
+  const endOctave = 7
+
   // Generate rows from high to low (top of grid = high notes)
-  for (let octave = uiStore.startOctave + uiStore.visibleOctaves - 1; octave >= uiStore.startOctave; octave--) {
+  for (let octave = endOctave; octave >= startOctave; octave--) {
     for (let noteIndex = 11; noteIndex >= 0; noteIndex--) {
       const pitch = octave * 12 + noteIndex
       const noteName = noteNames[noteIndex]
@@ -112,28 +119,58 @@ const trackColorClass = computed(() => {
   }
   return colors[selectedTrackId.value] || ''
 })
+
+// Scroll to middle range (around C4-C5) on mount
+function scrollToMiddleNotes() {
+  if (!gridContainer.value) return
+
+  const track = selectedTrack.value
+  if (!track || track.type === 'drums') return
+
+  // Calculate scroll position to show C4-C5 area in the middle of the view
+  // Full range is C1-B7 (84 notes), C4 is note 48 from top (index ~36 from top of our grid)
+  // Each row is 32px high
+  const c4Index = (7 - 4) * 12 // Rows from top to C4
+  const targetScroll = c4Index * 32 - (gridContainer.value.clientHeight / 2)
+
+  gridContainer.value.scrollTop = Math.max(0, targetScroll)
+}
+
+// Scroll to middle on mount and when track changes to melodic
+onMounted(() => {
+  setTimeout(scrollToMiddleNotes, 100)
+})
+
+watch(selectedTrack, (newTrack, oldTrack) => {
+  if (newTrack?.type === 'synth' && oldTrack?.type === 'drums') {
+    setTimeout(scrollToMiddleNotes, 50)
+  }
+})
 </script>
 
 <template>
-  <div class="relative" :class="trackColorClass">
-    <!-- Grid Container -->
-    <div class="flex">
-      <!-- Piano Keys / Row Labels -->
-      <div class="flex-shrink-0 w-16 border-r-3 border-chip-gray">
-        <div
-          v-for="row in noteRows"
-          :key="row.pitch"
-          class="h-cell flex items-center justify-end pr-2 border-b border-chip-darkgray font-pixel text-xs"
-          :class="row.isBlackKey ? 'bg-chip-black text-chip-gray' : 'bg-chip-darkgray text-chip-white'"
-        >
-          {{ row.label }}
+  <div class="relative h-full" :class="trackColorClass">
+    <!-- Scrollable Grid Container -->
+    <div ref="gridContainer" class="h-full overflow-auto scrollbar-pixel">
+      <div class="inline-flex min-w-full">
+        <!-- Piano Keys / Row Labels (sticky left) -->
+        <div class="flex-shrink-0 w-16 border-r-3 border-chip-gray sticky left-0 z-20 bg-chip-darkgray">
+          <!-- Empty space for Beat Ruler alignment -->
+          <div class="h-6 border-b-3 border-chip-gray bg-chip-darkgray sticky top-0 z-30"></div>
+          <!-- Note Labels -->
+          <div
+            v-for="row in noteRows"
+            :key="row.pitch"
+            class="h-cell flex items-center justify-end pr-2 border-b border-chip-darkgray font-pixel text-xs"
+            :class="row.isBlackKey ? 'bg-chip-black text-chip-gray' : 'bg-chip-darkgray text-chip-white'"
+          >
+            {{ row.label }}
+          </div>
         </div>
-      </div>
 
-      <!-- Main Grid -->
-      <div class="flex-1 overflow-x-auto scrollbar-pixel">
-        <div class="relative">
-          <!-- Beat Ruler -->
+        <!-- Main Grid -->
+        <div class="flex-1">
+          <!-- Beat Ruler (sticky top) -->
           <div class="flex h-6 border-b-3 border-chip-gray sticky top-0 bg-chip-darkgray z-10">
             <div
               v-for="beat in totalBeats"

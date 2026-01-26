@@ -3,6 +3,7 @@ import { Scheduler } from './Scheduler'
 import type { Note } from '@/types/note'
 import type { InstrumentConfig } from '@/types/instrument'
 import type { Track } from '@/types/project'
+import { AudioRenderer, type RenderOptions } from './AudioRenderer'
 
 /**
  * Main audio engine singleton
@@ -245,6 +246,41 @@ export class AudioEngine {
    */
   getCurrentTime(): number {
     return this.context?.currentTime ?? 0
+  }
+
+  /**
+   * Render project to WAV file and download
+   */
+  async renderToWav(
+    tracks: Track[],
+    instruments: Record<string, InstrumentConfig>,
+    tempo: number,
+    loopStart: number,
+    loopEnd: number,
+    filename: string,
+    onProgress?: (progress: number) => void
+  ): Promise<void> {
+    const options: RenderOptions = {
+      tracks,
+      instruments,
+      tempo,
+      loopStart,
+      loopEnd,
+      sampleRate: 44100,
+      onProgress,
+    }
+
+    const wavBlob = await AudioRenderer.renderToWav(options)
+
+    // Download the file
+    const url = URL.createObjectURL(wavBlob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
   }
 
   /**
