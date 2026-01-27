@@ -4,6 +4,7 @@ import { storeToRefs } from 'pinia'
 import { useProjectStore } from '@/stores/useProjectStore'
 import { useTransportStore } from '@/stores/useTransportStore'
 import { usePlayback } from '@/composables/usePlayback'
+import AudioVisualizer from '@/components/visualizer/AudioVisualizer.vue'
 
 const projectStore = useProjectStore()
 const transportStore = useTransportStore()
@@ -107,6 +108,11 @@ function handleTempoInput(event: Event) {
       <span class="font-body text-xl text-chip-white w-12">
         {{ Math.round(masterVolume * 100) }}%
       </span>
+    </div>
+
+    <!-- Audio Visualizer -->
+    <div class="flex-1 max-w-xs">
+      <AudioVisualizer type="bars" :height="40" />
     </div>
 
     <!-- Quick Actions -->

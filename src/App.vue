@@ -4,6 +4,7 @@ import { useProjectStore } from '@/stores/useProjectStore'
 import { useUIStore } from '@/stores/useUIStore'
 import { useKeyboard } from '@/composables/useKeyboard'
 import { useAutosave } from '@/composables/useAutosave'
+import { getHistoryInstance } from '@/composables/useHistory'
 import TransportBar from '@/components/transport/TransportBar.vue'
 import SequencerGrid from '@/components/sequencer/SequencerGrid.vue'
 import TrackSelector from '@/components/sequencer/TrackSelector.vue'
@@ -14,12 +15,15 @@ import LoopControls from '@/components/sequencer/LoopControls.vue'
 import WelcomeModal from '@/components/tutorial/WelcomeModal.vue'
 import TutorialOverlay from '@/components/tutorial/TutorialOverlay.vue'
 import ExportPanel from '@/components/export/ExportPanel.vue'
+import HelpModal from '@/components/help/HelpModal.vue'
 
 const projectStore = useProjectStore()
 const showWelcome = ref(false) // Will be set based on whether user has saved data
+const showHelp = ref(false)
 const sidebarTab = ref<'instrument' | 'templates'>('instrument')
 const uiStore = useUIStore()
 const autosave = useAutosave()
+const history = getHistoryInstance()
 
 // Enable keyboard shortcuts
 useKeyboard()
@@ -32,6 +36,9 @@ onMounted(() => {
     // Show welcome modal only for new users (no saved data)
     showWelcome.value = true
   }
+
+  // Initialize undo/redo tracking
+  history.initializeTracking()
 })
 
 // Create new project (with confirmation)
@@ -39,6 +46,14 @@ function handleNewProject() {
   if (confirm('Create a new project? Unsaved changes will be lost.')) {
     projectStore.newProject()
     uiStore.showNotification('New project created!', 'success')
+  }
+}
+
+// Clear all data (localStorage, cache, reset to defaults)
+function handleClearAllData() {
+  if (confirm('Clear all saved data and reset to defaults? This cannot be undone.')) {
+    autosave.clearAllData()
+    uiStore.showNotification('All data cleared!', 'success')
   }
 }
 </script>
@@ -63,6 +78,14 @@ function handleNewProject() {
           @click="handleNewProject"
         >
           NEW
+        </button>
+        <!-- Clear All Data Button -->
+        <button
+          class="btn-pixel-danger text-xs"
+          @click="handleClearAllData"
+          title="Clear all saved data and reset"
+        >
+          RESET
         </button>
         <!-- Export Panel Toggle -->
         <button
@@ -148,6 +171,15 @@ function handleNewProject() {
           <ZoomControls />
         </div>
 
+        <!-- Help Button -->
+        <button
+          class="btn-pixel text-xs"
+          @click="showHelp = true"
+          title="Keyboard shortcuts"
+        >
+          ? HELP
+        </button>
+
         <!-- Sidebar Toggle -->
         <button
           class="btn-pixel text-xs"
@@ -185,6 +217,12 @@ function handleNewProject() {
 
     <!-- Tutorial Overlay -->
     <TutorialOverlay />
+
+    <!-- Help Modal -->
+    <HelpModal
+      v-if="showHelp"
+      @close="showHelp = false"
+    />
   </div>
 </template>
 

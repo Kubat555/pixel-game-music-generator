@@ -84,11 +84,15 @@ export class AudioRenderer {
         }
 
         if (track.type === 'drums') {
-          const drumMap: Record<number, 'kick' | 'snare' | 'hihat' | 'tom'> = {
+          const drumMap: Record<number, 'kick' | 'snare' | 'hihat' | 'tom' | 'clap' | 'openhat' | 'crash' | 'rimshot'> = {
             36: 'kick',
             38: 'snare',
             42: 'hihat',
+            44: 'clap',
             45: 'tom',
+            46: 'openhat',
+            47: 'rimshot',
+            49: 'crash',
           }
           const drumType = drumMap[note.pitch] || 'kick'
           this.scheduleDrum(offlineContext, compressor, drumType, time, noteConfig.gain)
@@ -260,7 +264,7 @@ export class AudioRenderer {
   private static scheduleDrum(
     context: OfflineAudioContext,
     destination: AudioNode,
-    drumType: 'kick' | 'snare' | 'hihat' | 'tom',
+    drumType: 'kick' | 'snare' | 'hihat' | 'tom' | 'clap' | 'openhat' | 'crash' | 'rimshot',
     startTime: number,
     gain: number
   ): void {
@@ -276,6 +280,18 @@ export class AudioRenderer {
         break
       case 'tom':
         this.scheduleTom(context, destination, startTime, gain)
+        break
+      case 'clap':
+        this.scheduleClap(context, destination, startTime, gain)
+        break
+      case 'openhat':
+        this.scheduleOpenHat(context, destination, startTime, gain)
+        break
+      case 'crash':
+        this.scheduleCrash(context, destination, startTime, gain)
+        break
+      case 'rimshot':
+        this.scheduleRimshot(context, destination, startTime, gain)
         break
     }
   }
@@ -399,6 +415,171 @@ export class AudioRenderer {
 
     osc.start(startTime)
     osc.stop(startTime + 0.25)
+  }
+
+  private static scheduleClap(
+    context: OfflineAudioContext,
+    destination: AudioNode,
+    startTime: number,
+    gain: number
+  ): void {
+    const layers = 3
+    for (let i = 0; i < layers; i++) {
+      const delay = i * 0.01
+
+      const noiseLength = 0.08
+      const noiseBuffer = context.createBuffer(1, context.sampleRate * noiseLength, context.sampleRate)
+      const noiseData = noiseBuffer.getChannelData(0)
+      for (let j = 0; j < noiseBuffer.length; j++) {
+        noiseData[j] = Math.random() * 2 - 1
+      }
+
+      const noiseSource = context.createBufferSource()
+      noiseSource.buffer = noiseBuffer
+
+      const filter = context.createBiquadFilter()
+      filter.type = 'bandpass'
+      filter.frequency.setValueAtTime(1500, startTime + delay)
+      filter.Q.setValueAtTime(1.5, startTime + delay)
+
+      const noiseGain = context.createGain()
+      noiseGain.gain.setValueAtTime(gain * 0.6, startTime + delay)
+      noiseGain.gain.exponentialRampToValueAtTime(0.001, startTime + delay + 0.1)
+
+      noiseSource.connect(filter)
+      filter.connect(noiseGain)
+      noiseGain.connect(destination)
+
+      noiseSource.start(startTime + delay)
+      noiseSource.stop(startTime + delay + 0.15)
+    }
+  }
+
+  private static scheduleOpenHat(
+    context: OfflineAudioContext,
+    destination: AudioNode,
+    startTime: number,
+    gain: number
+  ): void {
+    const length = 0.2
+    const buffer = context.createBuffer(1, context.sampleRate * length, context.sampleRate)
+    const data = buffer.getChannelData(0)
+
+    for (let i = 0; i < buffer.length; i++) {
+      data[i] = Math.random() * 2 - 1
+    }
+
+    const source = context.createBufferSource()
+    source.buffer = buffer
+
+    const filter = context.createBiquadFilter()
+    filter.type = 'highpass'
+    filter.frequency.setValueAtTime(6000, startTime)
+
+    const bandpass = context.createBiquadFilter()
+    bandpass.type = 'bandpass'
+    bandpass.frequency.setValueAtTime(10000, startTime)
+    bandpass.Q.setValueAtTime(0.5, startTime)
+
+    const gainNode = context.createGain()
+    gainNode.gain.setValueAtTime(gain * 0.4, startTime)
+    gainNode.gain.exponentialRampToValueAtTime(0.001, startTime + 0.2)
+
+    source.connect(filter)
+    filter.connect(bandpass)
+    bandpass.connect(gainNode)
+    gainNode.connect(destination)
+
+    source.start(startTime)
+    source.stop(startTime + 0.25)
+  }
+
+  private static scheduleCrash(
+    context: OfflineAudioContext,
+    destination: AudioNode,
+    startTime: number,
+    gain: number
+  ): void {
+    const length = 0.8
+    const buffer = context.createBuffer(1, context.sampleRate * length, context.sampleRate)
+    const data = buffer.getChannelData(0)
+
+    for (let i = 0; i < buffer.length; i++) {
+      data[i] = Math.random() * 2 - 1
+    }
+
+    const source = context.createBufferSource()
+    source.buffer = buffer
+
+    const highpass = context.createBiquadFilter()
+    highpass.type = 'highpass'
+    highpass.frequency.setValueAtTime(4000, startTime)
+
+    const peak = context.createBiquadFilter()
+    peak.type = 'peaking'
+    peak.frequency.setValueAtTime(8000, startTime)
+    peak.Q.setValueAtTime(2, startTime)
+    peak.gain.setValueAtTime(6, startTime)
+
+    const gainNode = context.createGain()
+    gainNode.gain.setValueAtTime(gain * 0.5, startTime)
+    gainNode.gain.exponentialRampToValueAtTime(0.001, startTime + 0.8)
+
+    source.connect(highpass)
+    highpass.connect(peak)
+    peak.connect(gainNode)
+    gainNode.connect(destination)
+
+    source.start(startTime)
+    source.stop(startTime + 1)
+  }
+
+  private static scheduleRimshot(
+    context: OfflineAudioContext,
+    destination: AudioNode,
+    startTime: number,
+    gain: number
+  ): void {
+    const osc = context.createOscillator()
+    const oscGain = context.createGain()
+
+    osc.type = 'triangle'
+    osc.frequency.setValueAtTime(400, startTime)
+    osc.frequency.exponentialRampToValueAtTime(200, startTime + 0.02)
+
+    oscGain.gain.setValueAtTime(gain * 0.8, startTime)
+    oscGain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.08)
+
+    osc.connect(oscGain)
+    oscGain.connect(destination)
+
+    osc.start(startTime)
+    osc.stop(startTime + 0.1)
+
+    const noiseLength = 0.03
+    const noiseBuffer = context.createBuffer(1, context.sampleRate * noiseLength, context.sampleRate)
+    const noiseData = noiseBuffer.getChannelData(0)
+    for (let i = 0; i < noiseBuffer.length; i++) {
+      noiseData[i] = Math.random() * 2 - 1
+    }
+
+    const noiseSource = context.createBufferSource()
+    noiseSource.buffer = noiseBuffer
+
+    const filter = context.createBiquadFilter()
+    filter.type = 'highpass'
+    filter.frequency.setValueAtTime(3000, startTime)
+
+    const noiseGain = context.createGain()
+    noiseGain.gain.setValueAtTime(gain * 0.4, startTime)
+    noiseGain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.05)
+
+    noiseSource.connect(filter)
+    filter.connect(noiseGain)
+    noiseGain.connect(destination)
+
+    noiseSource.start(startTime)
+    noiseSource.stop(startTime + 0.05)
   }
 
   /**

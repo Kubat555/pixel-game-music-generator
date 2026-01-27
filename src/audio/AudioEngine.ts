@@ -157,7 +157,7 @@ export class AudioEngine {
    * Play a drum hit
    */
   playDrum(
-    drumType: 'kick' | 'snare' | 'hihat' | 'tom',
+    drumType: 'kick' | 'snare' | 'hihat' | 'tom' | 'clap' | 'openhat' | 'crash' | 'rimshot',
     time: number,
     velocity: number
   ): void {
@@ -199,11 +199,15 @@ export class AudioEngine {
 
         if (track.type === 'drums') {
           // Map pitch to drum sounds
-          const drumMap: Record<number, 'kick' | 'snare' | 'hihat' | 'tom'> = {
-            36: 'kick',   // C2
-            38: 'snare',  // D2
-            42: 'hihat',  // F#2
-            45: 'tom',    // A2
+          const drumMap: Record<number, 'kick' | 'snare' | 'hihat' | 'tom' | 'clap' | 'openhat' | 'crash' | 'rimshot'> = {
+            36: 'kick',     // C2
+            38: 'snare',    // D2
+            42: 'hihat',    // F#2 - Closed Hi-Hat
+            44: 'clap',     // G#2
+            45: 'tom',      // A2
+            46: 'openhat',  // A#2 - Open Hi-Hat
+            47: 'rimshot',  // B2
+            49: 'crash',    // C#3
           }
           const drumType = drumMap[note.pitch] || 'kick'
           this.playDrum(drumType, time, noteConfig.gain)
@@ -236,7 +240,7 @@ export class AudioEngine {
   /**
    * Preview a drum hit immediately
    */
-  previewDrum(drumType: 'kick' | 'snare' | 'hihat' | 'tom'): void {
+  previewDrum(drumType: 'kick' | 'snare' | 'hihat' | 'tom' | 'clap' | 'openhat' | 'crash' | 'rimshot'): void {
     if (!this.oscillator || !this.context) return
     this.oscillator.playDrum(drumType, this.context.currentTime, 0.8)
   }
@@ -246,6 +250,14 @@ export class AudioEngine {
    */
   getCurrentTime(): number {
     return this.context?.currentTime ?? 0
+  }
+
+  /**
+   * Get the master output node for connecting analyzers/visualizers
+   * Returns the compressor node as the connection point
+   */
+  getAnalyserConnectionPoint(): AudioNode | null {
+    return this.masterGain
   }
 
   /**

@@ -2,6 +2,20 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { UIMode, EditTool, GridCell, Notification } from '@/types/ui'
 
+// Clipboard types
+interface ClipboardNote {
+  pitch: number
+  startBeat: number
+  duration: number
+  velocity: number
+}
+
+interface ClipboardData {
+  notes: ClipboardNote[]
+  baseStartBeat: number
+  basePitch: number
+}
+
 export const useUIStore = defineStore('ui', () => {
   // State
   const mode = ref<UIMode>('beginner')
@@ -15,6 +29,8 @@ export const useUIStore = defineStore('ui', () => {
   const hoveredCell = ref<GridCell | null>(null)
   const selectedNotes = ref<string[]>([])
   const notifications = ref<Notification[]>([])
+  const isPasteMode = ref(false)
+  const clipboard = ref<ClipboardData | null>(null)
 
   // Grid display settings
   const beatsPerBar = ref(4)
@@ -129,6 +145,22 @@ export const useUIStore = defineStore('ui', () => {
     visibleOctaves.value = Math.max(1, Math.min(6, count)) // Allow up to 6 octaves
   }
 
+  function activatePasteMode(): void {
+    isPasteMode.value = true
+  }
+
+  function deactivatePasteMode(): void {
+    isPasteMode.value = false
+  }
+
+  function setClipboard(data: ClipboardData | null): void {
+    clipboard.value = data
+  }
+
+  function hasClipboardContent(): boolean {
+    return clipboard.value !== null && clipboard.value.notes.length > 0
+  }
+
   return {
     // State
     mode,
@@ -145,6 +177,8 @@ export const useUIStore = defineStore('ui', () => {
     beatsPerBar,
     visibleOctaves,
     startOctave,
+    isPasteMode,
+    clipboard,
 
     // Getters
     isBeginnerMode,
@@ -171,5 +205,9 @@ export const useUIStore = defineStore('ui', () => {
     showNotification,
     dismissNotification,
     setOctaveRange,
+    activatePasteMode,
+    deactivatePasteMode,
+    setClipboard,
+    hasClipboardContent,
   }
 })

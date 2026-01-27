@@ -3,11 +3,15 @@ import { usePlayback } from './usePlayback'
 import { useProjectStore } from '@/stores/useProjectStore'
 import { useUIStore } from '@/stores/useUIStore'
 import { useInstrumentStore } from '@/stores/useInstrumentStore'
+import { getHistoryInstance } from './useHistory'
+import { useClipboard } from './useClipboard'
 
 export function useKeyboard() {
   const { toggle, stop } = usePlayback()
   const projectStore = useProjectStore()
   const uiStore = useUIStore()
+  const history = getHistoryInstance()
+  const clipboard = useClipboard()
 
   function handleKeyDown(event: KeyboardEvent) {
     // Ignore if typing in an input
@@ -20,6 +24,73 @@ export function useKeyboard() {
 
     const key = event.key.toLowerCase()
     const isCtrlOrCmd = event.ctrlKey || event.metaKey
+    const isShift = event.shiftKey
+
+    // Undo: Ctrl+Z
+    if (key === 'z' && isCtrlOrCmd && !isShift) {
+      event.preventDefault()
+      if (history.undo()) {
+        uiStore.showNotification('Undo', 'info')
+      }
+      return
+    }
+
+    // Redo: Ctrl+Shift+Z or Ctrl+Y
+    if ((key === 'z' && isCtrlOrCmd && isShift) || (key === 'y' && isCtrlOrCmd)) {
+      event.preventDefault()
+      if (history.redo()) {
+        uiStore.showNotification('Redo', 'info')
+      }
+      return
+    }
+
+    // Copy: Ctrl+C
+    if (key === 'c' && isCtrlOrCmd) {
+      event.preventDefault()
+      if (uiStore.selectedNotes.length === 0) {
+        uiStore.showNotification('No notes selected to copy', 'warning')
+      } else {
+        clipboard.copy()
+      }
+      return
+    }
+
+    // Cut: Ctrl+X
+    if (key === 'x' && isCtrlOrCmd) {
+      event.preventDefault()
+      if (uiStore.selectedNotes.length === 0) {
+        uiStore.showNotification('No notes selected to cut', 'warning')
+      } else {
+        clipboard.cut()
+      }
+      return
+    }
+
+    // Paste: Ctrl+V - activate paste mode
+    if (key === 'v' && isCtrlOrCmd) {
+      event.preventDefault()
+      if (uiStore.hasClipboardContent()) {
+        uiStore.activatePasteMode()
+        uiStore.showNotification('Click where to paste notes', 'info')
+      } else {
+        uiStore.showNotification('Nothing to paste - copy notes first', 'warning')
+      }
+      return
+    }
+
+    // Select All: Ctrl+A
+    if (key === 'a' && isCtrlOrCmd) {
+      event.preventDefault()
+      clipboard.selectAll()
+      return
+    }
+
+    // Duplicate: Ctrl+D
+    if (key === 'd' && isCtrlOrCmd) {
+      event.preventDefault()
+      clipboard.duplicate()
+      return
+    }
 
     // Playback controls
     if (key === ' ' || key === 'spacebar') {
@@ -52,17 +123,23 @@ export function useKeyboard() {
 
     // Delete selected notes
     if (key === 'delete' || key === 'backspace') {
-      // Delete selected notes
-      for (const noteId of uiStore.selectedNotes) {
-        for (const track of projectStore.tracks) {
-          const noteIndex = track.notes.findIndex(n => n.id === noteId)
-          if (noteIndex !== -1) {
-            projectStore.removeNote(track.id, noteId)
-            break
+      if (uiStore.selectedNotes.length > 0) {
+        // Save state for undo before deleting
+        history.pushState()
+
+        // Delete selected notes
+        for (const noteId of [...uiStore.selectedNotes]) {
+          for (const track of projectStore.tracks) {
+            const noteIndex = track.notes.findIndex(n => n.id === noteId)
+            if (noteIndex !== -1) {
+              projectStore.removeNote(track.id, noteId)
+              break
+            }
           }
         }
+        uiStore.clearSelection()
+        uiStore.showNotification('Deleted notes', 'info')
       }
-      uiStore.clearSelection()
       return
     }
 

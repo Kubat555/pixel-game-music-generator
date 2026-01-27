@@ -23,11 +23,21 @@ export function usePlayback() {
       await initialize()
     }
 
+    // Always try to resume AudioContext (browser autoplay policy)
+    await engine.resume()
+
+    // Force stop scheduler first to clear any stuck state
+    engine.scheduler.stop()
+
     // Set up scheduler with current settings
     engine.scheduler.setLoop(loopStart.value, loopEnd.value, loopEnabled.value)
     engine.setMasterVolume(masterVolume.value)
 
-    // Start scheduler
+    // Start scheduler from current beat or loop start
+    const startBeat = transportStore.currentBeat >= loopEnd.value
+      ? loopStart.value
+      : transportStore.currentBeat
+
     engine.scheduler.start(
       tempo.value,
       // Audio callback - schedule notes
@@ -43,7 +53,7 @@ export function usePlayback() {
       (beat) => {
         transportStore.setCurrentBeat(beat)
       },
-      transportStore.currentBeat
+      startBeat
     )
 
     transportStore.play()
@@ -69,8 +79,16 @@ export function usePlayback() {
    * Toggle play/pause
    */
   async function toggle(): Promise<void> {
-    if (isPlaying.value) {
+    // Check actual scheduler state to detect stuck state
+    const schedulerPlaying = engine.scheduler.getIsPlaying()
+
+    if (isPlaying.value || schedulerPlaying) {
+      // If either thinks we're playing, stop everything
       pause()
+      // Sync state if out of sync
+      if (schedulerPlaying && !isPlaying.value) {
+        engine.scheduler.pause()
+      }
     } else {
       await play()
     }
@@ -87,13 +105,18 @@ export function usePlayback() {
 
     const track = tracks.value.find(t => t.id === trackId)
     if (track?.type === 'drums') {
-      const drumMap: Record<number, 'kick' | 'snare' | 'hihat' | 'tom'> = {
+      const drumMap: Record<number, 'kick' | 'snare' | 'hihat' | 'tom' | 'clap' | 'openhat' | 'crash' | 'rimshot'> = {
         36: 'kick',
         38: 'snare',
         42: 'hihat',
+        44: 'clap',
         45: 'tom',
+        46: 'openhat',
+        47: 'rimshot',
+        49: 'crash',
       }
-      engine.previewDrum(drumMap[pitch] || 'kick')
+      const drumType = drumMap[pitch] || 'kick'
+      engine.previewDrum(drumType)
     } else {
       engine.previewNote(pitch, config)
     }

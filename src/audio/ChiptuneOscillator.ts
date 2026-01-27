@@ -174,10 +174,10 @@ export class ChiptuneOscillator {
   }
 
   /**
-   * Play a drum sound (kick, snare, hihat)
+   * Play a drum sound
    */
   playDrum(
-    drumType: 'kick' | 'snare' | 'hihat' | 'tom',
+    drumType: 'kick' | 'snare' | 'hihat' | 'tom' | 'clap' | 'openhat' | 'crash' | 'rimshot',
     startTime: number,
     gain: number
   ): void {
@@ -193,6 +193,18 @@ export class ChiptuneOscillator {
         break
       case 'tom':
         this.playTom(startTime, gain)
+        break
+      case 'clap':
+        this.playClap(startTime, gain)
+        break
+      case 'openhat':
+        this.playOpenHat(startTime, gain)
+        break
+      case 'crash':
+        this.playCrash(startTime, gain)
+        break
+      case 'rimshot':
+        this.playRimshot(startTime, gain)
         break
     }
   }
@@ -298,5 +310,160 @@ export class ChiptuneOscillator {
 
     osc.start(startTime)
     osc.stop(startTime + 0.25)
+  }
+
+  private playClap(startTime: number, gain: number): void {
+    // Multiple layered noise bursts for clap effect
+    const layers = 3
+    for (let i = 0; i < layers; i++) {
+      const delay = i * 0.01 // Slight delay between layers
+
+      const noiseLength = 0.08
+      const noiseBuffer = this.context.createBuffer(1, this.context.sampleRate * noiseLength, this.context.sampleRate)
+      const noiseData = noiseBuffer.getChannelData(0)
+      for (let j = 0; j < noiseBuffer.length; j++) {
+        noiseData[j] = Math.random() * 2 - 1
+      }
+
+      const noiseSource = this.context.createBufferSource()
+      noiseSource.buffer = noiseBuffer
+
+      // Bandpass filter for clap character
+      const filter = this.context.createBiquadFilter()
+      filter.type = 'bandpass'
+      filter.frequency.setValueAtTime(1500, startTime + delay)
+      filter.Q.setValueAtTime(1.5, startTime + delay)
+
+      const noiseGain = this.context.createGain()
+      noiseGain.gain.setValueAtTime(gain * 0.6, startTime + delay)
+      noiseGain.gain.exponentialRampToValueAtTime(0.001, startTime + delay + 0.1)
+
+      noiseSource.connect(filter)
+      filter.connect(noiseGain)
+      noiseGain.connect(this.destination)
+
+      noiseSource.start(startTime + delay)
+      noiseSource.stop(startTime + delay + 0.15)
+    }
+  }
+
+  private playOpenHat(startTime: number, gain: number): void {
+    const length = 0.2 // Longer than closed hat
+    const buffer = this.context.createBuffer(1, this.context.sampleRate * length, this.context.sampleRate)
+    const data = buffer.getChannelData(0)
+
+    // High-frequency noise
+    for (let i = 0; i < buffer.length; i++) {
+      data[i] = Math.random() * 2 - 1
+    }
+
+    const source = this.context.createBufferSource()
+    source.buffer = buffer
+
+    // Highpass filter for metallic sound
+    const filter = this.context.createBiquadFilter()
+    filter.type = 'highpass'
+    filter.frequency.setValueAtTime(6000, startTime)
+
+    // Bandpass for character
+    const bandpass = this.context.createBiquadFilter()
+    bandpass.type = 'bandpass'
+    bandpass.frequency.setValueAtTime(10000, startTime)
+    bandpass.Q.setValueAtTime(0.5, startTime)
+
+    const gainNode = this.context.createGain()
+    gainNode.gain.setValueAtTime(gain * 0.4, startTime)
+    gainNode.gain.exponentialRampToValueAtTime(0.001, startTime + 0.2)
+
+    source.connect(filter)
+    filter.connect(bandpass)
+    bandpass.connect(gainNode)
+    gainNode.connect(this.destination)
+
+    source.start(startTime)
+    source.stop(startTime + 0.25)
+  }
+
+  private playCrash(startTime: number, gain: number): void {
+    const length = 0.8 // Long decay for crash
+    const buffer = this.context.createBuffer(1, this.context.sampleRate * length, this.context.sampleRate)
+    const data = buffer.getChannelData(0)
+
+    // Noise with some metallic character
+    for (let i = 0; i < buffer.length; i++) {
+      data[i] = Math.random() * 2 - 1
+    }
+
+    const source = this.context.createBufferSource()
+    source.buffer = buffer
+
+    // Highpass for brightness
+    const highpass = this.context.createBiquadFilter()
+    highpass.type = 'highpass'
+    highpass.frequency.setValueAtTime(4000, startTime)
+
+    // Peaking filter for metallic resonance
+    const peak = this.context.createBiquadFilter()
+    peak.type = 'peaking'
+    peak.frequency.setValueAtTime(8000, startTime)
+    peak.Q.setValueAtTime(2, startTime)
+    peak.gain.setValueAtTime(6, startTime)
+
+    const gainNode = this.context.createGain()
+    gainNode.gain.setValueAtTime(gain * 0.5, startTime)
+    gainNode.gain.exponentialRampToValueAtTime(0.001, startTime + 0.8)
+
+    source.connect(highpass)
+    highpass.connect(peak)
+    peak.connect(gainNode)
+    gainNode.connect(this.destination)
+
+    source.start(startTime)
+    source.stop(startTime + 1)
+  }
+
+  private playRimshot(startTime: number, gain: number): void {
+    // Short, sharp attack tone
+    const osc = this.context.createOscillator()
+    const oscGain = this.context.createGain()
+
+    osc.type = 'triangle'
+    osc.frequency.setValueAtTime(400, startTime)
+    osc.frequency.exponentialRampToValueAtTime(200, startTime + 0.02)
+
+    oscGain.gain.setValueAtTime(gain * 0.8, startTime)
+    oscGain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.08)
+
+    osc.connect(oscGain)
+    oscGain.connect(this.destination)
+
+    osc.start(startTime)
+    osc.stop(startTime + 0.1)
+
+    // Add noise click
+    const noiseLength = 0.03
+    const noiseBuffer = this.context.createBuffer(1, this.context.sampleRate * noiseLength, this.context.sampleRate)
+    const noiseData = noiseBuffer.getChannelData(0)
+    for (let i = 0; i < noiseBuffer.length; i++) {
+      noiseData[i] = Math.random() * 2 - 1
+    }
+
+    const noiseSource = this.context.createBufferSource()
+    noiseSource.buffer = noiseBuffer
+
+    const filter = this.context.createBiquadFilter()
+    filter.type = 'highpass'
+    filter.frequency.setValueAtTime(3000, startTime)
+
+    const noiseGain = this.context.createGain()
+    noiseGain.gain.setValueAtTime(gain * 0.4, startTime)
+    noiseGain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.05)
+
+    noiseSource.connect(filter)
+    filter.connect(noiseGain)
+    noiseGain.connect(this.destination)
+
+    noiseSource.start(startTime)
+    noiseSource.stop(startTime + 0.05)
   }
 }

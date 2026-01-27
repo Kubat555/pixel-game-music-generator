@@ -102,6 +102,30 @@ export function useAutosave() {
   }
 
   /**
+   * Clear all app data from localStorage and reset to defaults
+   */
+  function clearAllData(): void {
+    // Remove autosave data
+    localStorage.removeItem(STORAGE_KEY)
+
+    // Remove any other app-related keys
+    const keysToRemove: string[] = []
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i)
+      if (key && key.startsWith('pixelmusic_')) {
+        keysToRemove.push(key)
+      }
+    }
+    keysToRemove.forEach(key => localStorage.removeItem(key))
+
+    // Reset project to defaults
+    projectStore.newProject()
+
+    // Reset instrument settings to defaults
+    instrumentStore.selectTrack('lead')
+  }
+
+  /**
    * Export current project as a template JSON
    */
   function exportTemplate(): ProjectTemplate {
@@ -219,6 +243,7 @@ export function useAutosave() {
     saveState,
     loadState,
     clearState,
+    clearAllData,
     exportTemplate,
     importTemplate,
     downloadTemplate,
