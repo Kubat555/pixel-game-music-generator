@@ -163,7 +163,7 @@ function handleClearAllData() {
         <!-- Loop Controls -->
         <LoopControls />
       </div>
-
+      Made by Kubat555 (GitHub ^_^)
       <div class="flex items-center gap-4">
         <!-- Zoom Controls -->
         <div class="flex items-center gap-2">
