@@ -4,6 +4,7 @@ import { useProjectStore } from '@/stores/useProjectStore'
 import { useTransportStore } from '@/stores/useTransportStore'
 import { useInstrumentStore } from '@/stores/useInstrumentStore'
 import { useAudioEngine } from './useAudioEngine'
+import { updatePlayhead } from './usePlayheadBridge'
 
 export function usePlayback() {
   const projectStore = useProjectStore()
@@ -50,8 +51,10 @@ export function usePlayback() {
         )
       },
       // Visual callback - update UI
+      // PHASE 2: Direct DOM update for playhead (bypasses Vue reactivity for grid)
       (beat) => {
-        transportStore.setCurrentBeat(beat)
+        updatePlayhead(beat) // Direct DOM update - no grid re-renders
+        transportStore.setCurrentBeat(beat) // Still update store for other UI (beat counter, etc.)
       },
       startBeat
     )

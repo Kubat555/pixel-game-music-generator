@@ -7,6 +7,8 @@ import { useInstrumentStore } from '@/stores/useInstrumentStore'
 import { useUIStore } from '@/stores/useUIStore'
 import { usePlayback } from '@/composables/usePlayback'
 import { useClipboard } from '@/composables/useClipboard'
+import { registerPlayheadCallback, unregisterPlayheadCallback } from '@/composables/usePlayheadBridge'
+import { useVirtualGrid } from '@/composables/useVirtualGrid'
 import SequencerCell from './SequencerCell.vue'
 
 const projectStore = useProjectStore()
@@ -20,8 +22,22 @@ const clipboard = useClipboard()
 const gridContainer = ref<HTMLElement | null>(null)
 const gridContent = ref<HTMLElement | null>(null)
 
+// PHASE 2 OPTIMIZATION: Direct DOM ref for playhead (bypasses Vue reactivity)
+const playheadElement = ref<HTMLElement | null>(null)
+
+// Direct DOM update for playhead position - no Vue re-renders
+function updatePlayheadPosition(beat: number) {
+  if (playheadElement.value) {
+    const position = (beat - loopStart.value) * CELL_SIZE
+    playheadElement.value.style.transform = `translateX(${position}px)`
+  }
+}
+
+// Expose for usePlayback to call directly
+defineExpose({ updatePlayheadPosition })
+
 const { loopStart, loopEnd, tracks } = storeToRefs(projectStore)
-const { currentBeat, isPlaying } = storeToRefs(transportStore)
+const { isPlaying } = storeToRefs(transportStore)
 const { selectedTrackId } = storeToRefs(instrumentStore)
 const { selectedTool, selectedNotes, isPasteMode, clipboard: clipboardData } = storeToRefs(uiStore)
 
@@ -31,6 +47,19 @@ const PIANO_WIDTH = 64
 const RULER_HEIGHT = 24
 
 const totalBeats = computed(() => loopEnd.value - loopStart.value)
+
+// PHASE 3 OPTIMIZATION: Virtual grid configuration
+const virtualGridConfig = computed(() => ({
+  cellWidth: CELL_SIZE,
+  cellHeight: CELL_SIZE,
+  totalRows: noteRows.value.length,
+  totalCols: totalBeats.value,
+  bufferRows: 5,
+  bufferCols: 8,
+}))
+
+// Virtual grid for rendering only visible cells
+const { visibleCells, totalSize } = useVirtualGrid(gridContainer, virtualGridConfig)
 
 // Get the selected track
 const selectedTrack = computed(() =>
@@ -84,30 +113,44 @@ interface NoteInfo {
   duration: number
 }
 
-function getNoteInfoAt(beat: number, pitch: number): NoteInfo {
+// Default empty note info
+const defaultNoteInfo: NoteInfo = {
+  exists: false,
+  isStart: false,
+  isEnd: false,
+  isMiddle: false,
+  noteId: null,
+  duration: 1,
+}
+
+// PHASE 1 OPTIMIZATION: Note index for O(1) lookups instead of O(n) Array.find()
+const trackNoteIndex = computed(() => {
   const track = selectedTrack.value
-  if (!track) return { exists: false, isStart: false, isEnd: false, isMiddle: false, noteId: null, duration: 1 }
+  if (!track) return new Map<string, NoteInfo>()
 
-  const note = track.notes.find(n =>
-    n.pitch === pitch &&
-    beat >= n.startBeat &&
-    beat < n.startBeat + n.duration
-  )
+  const index = new Map<string, NoteInfo>()
 
-  if (!note) return { exists: false, isStart: false, isEnd: false, isMiddle: false, noteId: null, duration: 1 }
-
-  const isStart = beat === note.startBeat
-  const isEnd = beat === note.startBeat + note.duration - 1
-  const isMiddle = !isStart && !isEnd
-
-  return {
-    exists: true,
-    isStart,
-    isEnd,
-    isMiddle,
-    noteId: note.id,
-    duration: note.duration,
+  for (const note of track.notes) {
+    const duration = note.duration
+    for (let beat = note.startBeat; beat < note.startBeat + duration; beat++) {
+      const key = `${note.pitch}:${beat}`
+      index.set(key, {
+        exists: true,
+        isStart: beat === note.startBeat,
+        isEnd: beat === note.startBeat + duration - 1,
+        isMiddle: beat > note.startBeat && beat < note.startBeat + duration - 1,
+        noteId: note.id,
+        duration: duration,
+      })
+    }
   }
+
+  return index
+})
+
+// O(1) lookup function
+function getNoteInfoAt(beat: number, pitch: number): NoteInfo {
+  return trackNoteIndex.value.get(`${pitch}:${beat}`) ?? defaultNoteInfo
 }
 
 function isNoteSelected(noteId: string | null): boolean {
@@ -390,10 +433,16 @@ function handleKeyDown(event: KeyboardEvent) {
 onMounted(() => {
   window.addEventListener('keydown', handleKeyDown)
   setTimeout(scrollToMiddleNotes, 100)
+
+  // PHASE 2: Register playhead callback for direct DOM updates
+  registerPlayheadCallback(updatePlayheadPosition)
 })
 
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeyDown)
+
+  // PHASE 2: Unregister playhead callback
+  unregisterPlayheadCallback()
 })
 
 // ===== MISC =====
@@ -541,33 +590,44 @@ const pasteRequiresLoopExpansion = computed(() => {
             </div>
           </div>
 
-          <!-- Grid Rows -->
-          <div class="relative">
+          <!-- Grid Rows - PHASE 3 OPTIMIZATION: Virtual scrolling -->
+          <div
+            class="relative"
+            :style="{
+              width: `${totalSize.width}px`,
+              height: `${totalSize.height}px`,
+            }"
+          >
+            <!-- Background grid lines (bar separators) -->
             <div
-              v-for="row in noteRows"
-              :key="row.pitch"
-              class="flex"
-            >
-              <div
-                v-for="beat in totalBeats"
-                :key="beat"
-                class="w-cell h-cell flex-shrink-0"
-              >
-                <SequencerCell
-                  :beat="beat - 1 + loopStart"
-                  :pitch="row.pitch"
-                  :note-info="getNoteInfoAt(beat - 1 + loopStart, row.pitch)"
-                  :playing="isPlaying && currentBeat === beat - 1 + loopStart"
-                  :is-bar-start="(beat - 1) % 4 === 0"
-                  :is-selected="isNoteSelected(getNoteInfoAt(beat - 1 + loopStart, row.pitch).noteId)"
-                  :tool="selectedTool"
-                  @click="handleCellClick(beat - 1 + loopStart, row.pitch, $event)"
-                  @resize-start="handleResizeStart($event, beat - 1 + loopStart, row.pitch)"
-                  @mouseenter="handleCellHover(beat - 1 + loopStart, row.pitch)"
-                  @mouseleave="handleCellLeave"
-                />
-              </div>
-            </div>
+              v-for="col in Math.ceil(totalBeats / 4)"
+              :key="`bar-${col}`"
+              class="absolute top-0 bottom-0 w-0.5 bg-chip-gray opacity-30"
+              :style="{ left: `${(col - 1) * 4 * CELL_SIZE}px` }"
+            ></div>
+
+            <!-- Virtual cells - only renders visible cells -->
+            <SequencerCell
+              v-for="cell in visibleCells"
+              :key="cell.key"
+              :style="{
+                position: 'absolute',
+                left: `${cell.col * CELL_SIZE}px`,
+                top: `${cell.row * CELL_SIZE}px`,
+                width: `${CELL_SIZE}px`,
+                height: `${CELL_SIZE}px`,
+              }"
+              :beat="cell.col + loopStart"
+              :pitch="noteRows[cell.row]?.pitch ?? 60"
+              :note-info="getNoteInfoAt(cell.col + loopStart, noteRows[cell.row]?.pitch ?? 60)"
+              :is-bar-start="cell.col % 4 === 0"
+              :is-selected="isNoteSelected(getNoteInfoAt(cell.col + loopStart, noteRows[cell.row]?.pitch ?? 60).noteId)"
+              :tool="selectedTool"
+              @click="handleCellClick(cell.col + loopStart, noteRows[cell.row]?.pitch ?? 60, $event)"
+              @resize-start="handleResizeStart($event, cell.col + loopStart, noteRows[cell.row]?.pitch ?? 60)"
+              @mouseenter="handleCellHover(cell.col + loopStart, noteRows[cell.row]?.pitch ?? 60)"
+              @mouseleave="handleCellLeave"
+            />
 
             <!-- Selection Box -->
             <div
@@ -600,11 +660,14 @@ const pasteRequiresLoopExpansion = computed(() => {
               ></div>
             </template>
 
-            <!-- Playhead -->
+            <!-- Playhead (PHASE 2: uses direct DOM updates via ref, not Vue reactivity) -->
             <div
-              v-if="isPlaying"
-              class="absolute top-0 bottom-0 w-1 bg-chip-green z-20 pointer-events-none transition-transform duration-75"
-              :style="{ transform: `translateX(${(currentBeat - loopStart) * 32}px)` }"
+              ref="playheadElement"
+              class="absolute top-0 w-1 bg-chip-green z-20 pointer-events-none"
+              :style="{
+                display: isPlaying ? 'block' : 'none',
+                height: `${totalSize.height}px`,
+              }"
             >
               <div class="absolute -top-1 left-1/2 -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-l-transparent border-r-transparent border-t-chip-green"></div>
             </div>

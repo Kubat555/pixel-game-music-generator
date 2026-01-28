@@ -14,7 +14,6 @@ const props = defineProps<{
   beat: number
   pitch: number
   noteInfo: NoteInfo
-  playing: boolean
   isBarStart: boolean
   isSelected: boolean
   tool: 'pencil' | 'eraser' | 'select'
@@ -47,9 +46,7 @@ const cellClasses = computed(() => {
     }
   }
 
-  if (props.playing && props.noteInfo.exists) {
-    classes.push('playing')
-  }
+  // NOTE: 'playing' class removed - playhead is now a separate DOM element
 
   if (props.isBarStart) {
     classes.push('bar-start')
