@@ -123,8 +123,23 @@ function handleResizeStart(event: MouseEvent) {
   @apply bg-chip-green;
 }
 
+/* Multi-beat notes - remove borders between segments for visual continuity */
+.cell-note.active.note-start {
+  border-right-color: transparent;
+}
+
+.cell-note.active.note-middle {
+  border-left-color: transparent;
+  border-right-color: transparent;
+}
+
+.cell-note.active.note-end {
+  border-left-color: transparent;
+}
+
+/* Hover handled by overlay in SequencerGrid */
 .cell-note.active:hover {
-  @apply bg-chip-lime;
+  filter: brightness(1.1);
 }
 
 .cell-note.playing {
@@ -159,26 +174,48 @@ function handleResizeStart(event: MouseEvent) {
 
 /* Note start has rounded left edge */
 .cell-note.note-start .note-body {
-  border-radius: 3px 0 0 3px;
-  margin-right: 0;
+  border-radius: 4px 0 0 4px;
+  margin-right: -1px;
+  border-right: none;
 }
 
-/* Note middle has no rounded edges */
+/* Note middle has no rounded edges - lighter shade to show continuity */
 .cell-note.note-middle .note-body {
   border-radius: 0;
-  margin-left: 0;
-  margin-right: 0;
+  margin-left: -1px;
+  margin-right: -1px;
+  filter: brightness(1.1);
 }
 
 /* Note end has rounded right edge */
 .cell-note.note-end .note-body {
-  border-radius: 0 3px 3px 0;
-  margin-left: 0;
+  border-radius: 0 4px 4px 0;
+  margin-left: -1px;
 }
 
 /* Single note (duration=1) has all rounded edges */
 .cell-note.note-single .note-body {
-  border-radius: 3px;
+  border-radius: 4px;
+  margin: 2px;
+}
+
+/* Multi-beat notes - add top/bottom highlight line for visual connection */
+.cell-note.note-start .note-body::after,
+.cell-note.note-middle .note-body::after,
+.cell-note.note-end .note-body::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 2px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 1px;
+}
+
+/* Don't show connector line on single notes */
+.cell-note.note-single .note-body::after {
+  display: none;
 }
 
 /* Resize handle */
@@ -203,15 +240,12 @@ function handleResizeStart(event: MouseEvent) {
   }
 }
 
-/* Track-specific colors are handled by parent */
+/* Track-specific colors - each instrument has its own color */
 :deep(.track-lead) .cell-note.active {
   @apply bg-chip-cyan;
 }
 :deep(.track-lead) .cell-note.active:hover {
   background: #40D8D8;
-}
-:deep(.track-lead) .cell-note.playing {
-  background: #60F8F8;
 }
 
 :deep(.track-bass) .cell-note.active {
@@ -220,9 +254,6 @@ function handleResizeStart(event: MouseEvent) {
 :deep(.track-bass) .cell-note.active:hover {
   background: #B040F8;
 }
-:deep(.track-bass) .cell-note.playing {
-  background: #D080FF;
-}
 
 :deep(.track-harmony) .cell-note.active {
   @apply bg-chip-yellow;
@@ -230,17 +261,11 @@ function handleResizeStart(event: MouseEvent) {
 :deep(.track-harmony) .cell-note.active:hover {
   background: #FFD840;
 }
-:deep(.track-harmony) .cell-note.playing {
-  background: #FFE870;
-}
 
 :deep(.track-drums) .cell-note.active {
   @apply bg-chip-orange;
 }
 :deep(.track-drums) .cell-note.active:hover {
   background: #FF9040;
-}
-:deep(.track-drums) .cell-note.playing {
-  background: #FFB070;
 }
 </style>

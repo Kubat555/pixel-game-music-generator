@@ -15,7 +15,7 @@ const projectStore = useProjectStore()
 const transportStore = useTransportStore()
 const instrumentStore = useInstrumentStore()
 const uiStore = useUIStore()
-const { previewNote } = usePlayback()
+const { previewNote, playFromBeat } = usePlayback()
 const clipboard = useClipboard()
 
 // Ref for scrolling container
@@ -28,7 +28,7 @@ const playheadElement = ref<HTMLElement | null>(null)
 // Direct DOM update for playhead position - no Vue re-renders
 function updatePlayheadPosition(beat: number) {
   if (playheadElement.value) {
-    const position = (beat - loopStart.value) * CELL_SIZE
+    const position = (beat - loopStart.value) * cellSize.value
     playheadElement.value.style.transform = `translateX(${position}px)`
   }
 }
@@ -39,10 +39,9 @@ defineExpose({ updatePlayheadPosition })
 const { loopStart, loopEnd, tracks } = storeToRefs(projectStore)
 const { isPlaying } = storeToRefs(transportStore)
 const { selectedTrackId } = storeToRefs(instrumentStore)
-const { selectedTool, selectedNotes, isPasteMode, clipboard: clipboardData } = storeToRefs(uiStore)
+const { selectedTool, selectedNotes, isPasteMode, clipboard: clipboardData, cellSize } = storeToRefs(uiStore)
 
-// Grid configuration
-const CELL_SIZE = 32
+// Grid configuration - cellSize is now dynamic from UI store for zoom support
 const PIANO_WIDTH = 64
 const RULER_HEIGHT = 24
 
@@ -50,8 +49,8 @@ const totalBeats = computed(() => loopEnd.value - loopStart.value)
 
 // PHASE 3 OPTIMIZATION: Virtual grid configuration
 const virtualGridConfig = computed(() => ({
-  cellWidth: CELL_SIZE,
-  cellHeight: CELL_SIZE,
+  cellWidth: cellSize.value,
+  cellHeight: cellSize.value,
   totalRows: noteRows.value.length,
   totalCols: totalBeats.value,
   bufferRows: 5,
@@ -178,10 +177,10 @@ const selectionBox = computed(() => {
 
   if (startRowIndex === -1 || endRowIndex === -1) return null
 
-  const x = (startBeat - loopStart.value) * CELL_SIZE
-  const y = startRowIndex * CELL_SIZE
-  const width = (endBeat - startBeat + 1) * CELL_SIZE
-  const height = (endRowIndex - startRowIndex + 1) * CELL_SIZE
+  const x = (startBeat - loopStart.value) * cellSize.value
+  const y = startRowIndex * cellSize.value
+  const width = (endBeat - startBeat + 1) * cellSize.value
+  const height = (endRowIndex - startRowIndex + 1) * cellSize.value
 
   return { x, y, width, height }
 })
@@ -216,8 +215,8 @@ function getGridPosition(event: MouseEvent): { beat: number; pitch: number } | n
 
   if (x < 0 || y < 0) return null
 
-  const beat = Math.floor(x / CELL_SIZE) + loopStart.value
-  const rowIndex = Math.floor(y / CELL_SIZE)
+  const beat = Math.floor(x / cellSize.value) + loopStart.value
+  const rowIndex = Math.floor(y / cellSize.value)
 
   if (rowIndex >= noteRows.value.length || rowIndex < 0) return null
 
@@ -241,9 +240,10 @@ function handleGridMouseDown(event: MouseEvent) {
       return
     }
 
-    // Auto-expand loop if needed
+    // Auto-expand loop if needed (round up to nearest 4 beats)
     if (pasteRequiresLoopExpansion.value > 0) {
-      projectStore.setLoopRegion(loopStart.value, pasteRequiresLoopExpansion.value)
+      const roundedEnd = Math.ceil(pasteRequiresLoopExpansion.value / 4) * 4
+      projectStore.setLoopRegion(loopStart.value, roundedEnd)
     }
 
     clipboard.paste(pos.beat, pos.pitch)
@@ -445,13 +445,42 @@ onUnmounted(() => {
   unregisterPlayheadCallback()
 })
 
+// ===== HOVER STATE FOR FULL NOTE HIGHLIGHT =====
+const hoveredNoteId = ref<string | null>(null)
+
+// Get full note info for the hovered note (for overlay)
+const hoveredNoteOverlay = computed(() => {
+  if (!hoveredNoteId.value) return null
+
+  const track = selectedTrack.value
+  if (!track) return null
+
+  const note = track.notes.find(n => n.id === hoveredNoteId.value)
+  if (!note) return null
+
+  const rowIndex = noteRows.value.findIndex(r => r.pitch === note.pitch)
+  if (rowIndex === -1) return null
+
+  return {
+    left: (note.startBeat - loopStart.value) * cellSize.value,
+    top: rowIndex * cellSize.value,
+    width: note.duration * cellSize.value,
+    height: cellSize.value,
+  }
+})
+
 // ===== MISC =====
 function handleCellHover(beat: number, pitch: number) {
   uiStore.setHoveredCell({ trackId: selectedTrackId.value, beat, pitch })
+
+  // Track hovered note for full-note highlight
+  const noteInfo = getNoteInfoAt(beat, pitch)
+  hoveredNoteId.value = noteInfo.noteId
 }
 
 function handleCellLeave() {
   uiStore.setHoveredCell(null)
+  hoveredNoteId.value = null
 }
 
 const trackColorClass = computed(() => {
@@ -470,7 +499,7 @@ function scrollToMiddleNotes() {
   if (!track || track.type === 'drums') return
 
   const c4Index = (7 - 4) * 12
-  const targetScroll = c4Index * CELL_SIZE - (gridContainer.value.clientHeight / 2)
+  const targetScroll = c4Index * cellSize.value - (gridContainer.value.clientHeight / 2)
   gridContainer.value.scrollTop = Math.max(0, targetScroll)
 }
 
@@ -543,11 +572,11 @@ const pasteRequiresLoopExpansion = computed(() => {
 </script>
 
 <template>
-  <div class="relative h-full" :class="trackColorClass">
-    <!-- Paste Mode Indicator -->
+  <div class="flex flex-col h-full" :class="trackColorClass">
+    <!-- Paste Mode Indicator - above the grid -->
     <div
       v-if="isPasteMode"
-      class="absolute top-2 left-1/2 -translate-x-1/2 z-30 panel-pixel bg-chip-purple px-4 py-2 font-pixel text-xs text-chip-white"
+      class="flex-shrink-0 panel-pixel bg-chip-purple px-4 py-2 font-pixel text-xs text-chip-white text-center"
     >
       PASTE MODE - Click to place notes (ESC to cancel)
     </div>
@@ -555,7 +584,7 @@ const pasteRequiresLoopExpansion = computed(() => {
     <!-- Scrollable Grid Container -->
     <div
       ref="gridContainer"
-      class="h-full overflow-auto scrollbar-pixel"
+      class="flex-1 overflow-auto scrollbar-pixel relative"
       :class="{ 'cursor-copy': isPasteMode, 'cursor-crosshair': selectedTool === 'select' && !isPasteMode }"
       @mousedown="handleGridMouseDown"
       @mousemove="handleGridMouseMove"
@@ -569,8 +598,9 @@ const pasteRequiresLoopExpansion = computed(() => {
           <div
             v-for="row in noteRows"
             :key="row.pitch"
-            class="h-cell flex items-center justify-end pr-2 border-b border-chip-darkgray font-pixel text-xs"
+            class="flex items-center justify-end pr-2 border-b border-chip-darkgray font-pixel text-xs"
             :class="row.isBlackKey ? 'bg-chip-black text-chip-gray' : 'bg-chip-darkgray text-chip-white'"
+            :style="{ height: `${cellSize}px` }"
           >
             {{ row.label }}
           </div>
@@ -578,13 +608,16 @@ const pasteRequiresLoopExpansion = computed(() => {
 
         <!-- Main Grid -->
         <div class="flex-1 relative">
-          <!-- Beat Ruler (sticky top) -->
+          <!-- Beat Ruler (sticky top) - Click to play from that beat -->
           <div class="flex h-6 border-b-3 border-chip-gray sticky top-0 bg-chip-darkgray z-10">
             <div
               v-for="beat in totalBeats"
               :key="beat"
-              class="w-cell flex-shrink-0 flex items-center justify-center font-body text-sm border-r border-chip-darkgray"
+              class="flex-shrink-0 flex items-center justify-center font-body text-sm border-r border-chip-darkgray cursor-pointer hover:bg-chip-green hover:text-chip-black transition-colors"
               :class="(beat - 1) % 4 === 0 ? 'text-chip-white bg-chip-gray' : 'text-chip-gray'"
+              :style="{ width: `${cellSize}px` }"
+              :title="`Play from beat ${beat}`"
+              @click="playFromBeat(beat - 1 + loopStart)"
             >
               {{ beat }}
             </div>
@@ -603,7 +636,7 @@ const pasteRequiresLoopExpansion = computed(() => {
               v-for="col in Math.ceil(totalBeats / 4)"
               :key="`bar-${col}`"
               class="absolute top-0 bottom-0 w-0.5 bg-chip-gray opacity-30"
-              :style="{ left: `${(col - 1) * 4 * CELL_SIZE}px` }"
+              :style="{ left: `${(col - 1) * 4 * cellSize}px` }"
             ></div>
 
             <!-- Virtual cells - only renders visible cells -->
@@ -612,10 +645,10 @@ const pasteRequiresLoopExpansion = computed(() => {
               :key="cell.key"
               :style="{
                 position: 'absolute',
-                left: `${cell.col * CELL_SIZE}px`,
-                top: `${cell.row * CELL_SIZE}px`,
-                width: `${CELL_SIZE}px`,
-                height: `${CELL_SIZE}px`,
+                left: `${cell.col * cellSize}px`,
+                top: `${cell.row * cellSize}px`,
+                width: `${cellSize}px`,
+                height: `${cellSize}px`,
               }"
               :beat="cell.col + loopStart"
               :pitch="noteRows[cell.row]?.pitch ?? 60"
@@ -628,6 +661,20 @@ const pasteRequiresLoopExpansion = computed(() => {
               @mouseenter="handleCellHover(cell.col + loopStart, noteRows[cell.row]?.pitch ?? 60)"
               @mouseleave="handleCellLeave"
             />
+
+            <!-- Hovered Note Overlay - highlights entire note on hover -->
+            <div
+              v-if="hoveredNoteOverlay"
+              class="absolute pointer-events-none z-5 rounded border-2 border-chip-lime"
+              :style="{
+                left: `${hoveredNoteOverlay.left}px`,
+                top: `${hoveredNoteOverlay.top}px`,
+                width: `${hoveredNoteOverlay.width}px`,
+                height: `${hoveredNoteOverlay.height}px`,
+                background: 'linear-gradient(90deg, rgba(80,200,120,0.4) 0%, rgba(120,255,160,0.5) 50%, rgba(80,200,120,0.4) 100%)',
+                boxShadow: '0 0 10px rgba(80,255,120,0.5), inset 0 0 10px rgba(255,255,255,0.2)',
+              }"
+            ></div>
 
             <!-- Selection Box -->
             <div
@@ -651,10 +698,10 @@ const pasteRequiresLoopExpansion = computed(() => {
                   ? 'bg-chip-green bg-opacity-50 border-chip-lime'
                   : 'bg-chip-red bg-opacity-50 border-chip-red'"
                 :style="{
-                  left: `${(previewNote.beat - loopStart) * 32}px`,
-                  top: `${noteRows.findIndex(r => r.pitch === previewNote.pitch) * 32}px`,
-                  width: `${previewNote.duration * 32}px`,
-                  height: '32px',
+                  left: `${(previewNote.beat - loopStart) * cellSize}px`,
+                  top: `${noteRows.findIndex(r => r.pitch === previewNote.pitch) * cellSize}px`,
+                  width: `${previewNote.duration * cellSize}px`,
+                  height: `${cellSize}px`,
                   display: noteRows.findIndex(r => r.pitch === previewNote.pitch) === -1 ? 'none' : 'block',
                 }"
               ></div>

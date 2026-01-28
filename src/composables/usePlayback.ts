@@ -16,9 +16,9 @@ export function usePlayback() {
   const { tempo, loopStart, loopEnd, loopEnabled, tracks } = storeToRefs(projectStore)
 
   /**
-   * Start playback
+   * Start playback from optional beat position
    */
-  async function play(): Promise<void> {
+  async function play(fromBeat?: number): Promise<void> {
     // Ensure audio engine is initialized
     if (!isReady.value) {
       await initialize()
@@ -34,10 +34,18 @@ export function usePlayback() {
     engine.scheduler.setLoop(loopStart.value, loopEnd.value, loopEnabled.value)
     engine.setMasterVolume(masterVolume.value)
 
-    // Start scheduler from current beat or loop start
-    const startBeat = transportStore.currentBeat >= loopEnd.value
-      ? loopStart.value
-      : transportStore.currentBeat
+    // Determine start beat
+    let startBeat: number
+    if (fromBeat !== undefined) {
+      // Start from specified beat
+      startBeat = fromBeat
+    } else if (transportStore.currentBeat >= loopEnd.value) {
+      // Reset to loop start if past the end
+      startBeat = loopStart.value
+    } else {
+      // Continue from current position
+      startBeat = transportStore.currentBeat
+    }
 
     engine.scheduler.start(
       tempo.value,
@@ -60,6 +68,13 @@ export function usePlayback() {
     )
 
     transportStore.play()
+  }
+
+  /**
+   * Start playback from a specific beat
+   */
+  async function playFromBeat(beat: number): Promise<void> {
+    await play(beat)
   }
 
   /**
@@ -149,6 +164,7 @@ export function usePlayback() {
 
   return {
     play,
+    playFromBeat,
     pause,
     stop,
     toggle,
