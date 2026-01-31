@@ -205,8 +205,6 @@ MIT License - feel free to use for personal and commercial projects.
 
 ## Screenshots
 
-Здесь несколько скриншотов интерфейса:
-
 ![Screenshot 2](screenshots/2.png)
 
 ![Screenshot 3](screenshots/3.png)
