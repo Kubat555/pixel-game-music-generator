@@ -203,6 +203,18 @@ MIT License - feel free to use for personal and commercial projects.
 - Built with Vue 3 and Web Audio API
 - Pixel-art aesthetic inspired by retro games
 
+## Screenshots
+
+Здесь несколько скриншотов интерфейса:
+
+![Screenshot 2](screenshots/2.png)
+
+![Screenshot 3](screenshots/3.png)
+
+![Screenshot 4](screenshots/4.png)
+
+![Screenshot 5](screenshots/5.png)
+
 ---
 
 Made with ♪ for indie game developers and chiptune enthusiasts
